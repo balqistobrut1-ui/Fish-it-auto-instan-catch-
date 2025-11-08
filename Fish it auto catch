@@ -1,133 +1,161 @@
-// =========================================================
-// 1. VARIABEL GLOBAL & STATUS DATA HUB
-// =========================================================
+-- =========================================================
+-- INISIALISASI & VARIABEL GLOBAL
+-- =========================================================
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
 
-// Variabel Kontrol Pancingan (0.00 hingga 10.00)
-FLOAT castPower = 5.0;  
-FLOAT reelSpeed = 5.0;  
+-- Variabel Status
+local IsPanelOpen = false
+local CastPower = 5.0  -- Nilai default 0.00 - 10.00
+local ReelSpeed = 5.0  -- Nilai default 0.00 - 10.00
 
-// Variabel Status UI
-BOOL isPanelOpen = FALSE;
-FLOAT ScreenWidth = GetSystemWidth(); // Lebar layar perangkat
-FLOAT ScreenHeight = GetSystemHeight();
+-- Membuat GUI Utama
+local HubGui = Instance.new("ScreenGui")
+HubGui.Name = "FishItCompanionHub"
+HubGui.Parent = PlayerGui
 
-// Variabel Data dari API Game Pihak Ketiga (Fish It!)
-INT playerCoins = API_Fetch_Coin();
-STRING currentLocation = API_Fetch_Current_Location();
-STRING[] availableIslands = API_Fetch_Islands();
-BOOL isEventActive = API_Check_Event_Status();
+-- =========================================================
+-- 1. FLOATING HUB ICON & LOGIKA DRAG
+-- =========================================================
 
+local FloatingIcon = Instance.new("ImageButton")
+FloatingIcon.Size = UDim2.new(0, 50, 0, 50) 
+FloatingIcon.Position = UDim2.new(1, -60, 0.8, 0) -- Kanan Bawah
+FloatingIcon.BackgroundTransparency = 0 -- Ganti jadi 1 jika pakai image transparan
+FloatingIcon.BackgroundColor3 = Color3.fromRGB(0, 150, 255) -- Warna Biru (Contoh)
+FloatingIcon.Text = "🎣" -- Ganti dengan Ikon/ImageID jika mau
+FloatingIcon.Font = Enum.Font.SourceSansBold
+FloatingIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatingIcon.Parent = HubGui
 
-// =========================================================
-// 2. LOGIKA FLOATING ICON & NAVIGASI PANEL
-// =========================================================
+-- Logika Dragging sederhana (Membutuhkan Logika Snapping yang lebih kompleks untuk produksi)
+FloatingIcon.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        -- Placeholder for Drag logic
+    end
+end)
 
-FUNCTION OnFloatingIconTap() {
-    IF (isPanelOpen == FALSE) {
-        LaunchSemiScreenPanel(); // Meluncurkan Panel Kontrol Samping
-        isPanelOpen = TRUE;
-    } ELSE {
-        CloseSemiScreenPanel();
-        isPanelOpen = FALSE;
-    }
-}
+-- =========================================================
+-- 2. PANEL KONTROL SAMPING (GUI VISUAL)
+-- =========================================================
 
-FUNCTION OnFloatingIconDrag(newX, newY) {
-    // Logika Snapping: Menempelkan ikon ke tepi layar terdekat
-    IF (newX > ScreenWidth / 2) {
-        MoveIconToEdge(Right); // Logika visual untuk menempel ke kanan
-    } ELSE {
-        MoveIconToEdge(Left);  // Logika visual untuk menempel ke kiri
-    }
-}
+local SidePanel = Instance.new("Frame")
+SidePanel.Size = UDim2.new(0.6, 0, 1, 0) -- Lebar 60%, Tinggi 100%
+SidePanel.Position = UDim2.new(1, 0, 0, 0) -- Mulai tersembunyi
+SidePanel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+SidePanel.ZIndex = 9
+SidePanel.Parent = HubGui
 
-FUNCTION OnPanelDismissed() {
-    // Dipanggil saat pengguna menekan 'X' atau tap di luar panel
-    CloseSemiScreenPanel();
-    isPanelOpen = FALSE;
-}
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -40, 0, 30)
+TitleLabel.Position = UDim2.new(0, 10, 0, 10)
+TitleLabel.Text = "FISH IT! QUICK ACCESS"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Parent = SidePanel
 
+-- FRAME UTAMA untuk Kontrol Pancingan
+local MainContent = Instance.new("Frame")
+MainContent.Size = UDim2.new(1, -20, 0.9, -50) -- Ambil sisa ruang
+MainContent.Position = UDim2.new(0, 10, 0, 50)
+MainContent.BackgroundTransparency = 1
+MainContent.Parent = SidePanel
 
-// =========================================================
-// 3. WIDGET KONTROL PANCINGAN (Slider & Input Presisi)
-// =========================================================
+-- Fungsi Animasi
+local function OpenPanel()
+    IsPanelOpen = true
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local goal = {Position = UDim2.new(0.4, 0, 0, 0)} -- Pindah ke 40% dari kiri (membuat panel 60% terlihat)
+    TweenService:Create(SidePanel, tweenInfo, goal):Play()
+end
 
-// Fungsi dipanggil saat Slider digeser atau tombol +/- ditekan
-FUNCTION OnCastPowerSliderChange(newValue) {
-    castPower = Clamp(newValue, 0.00, 10.00); 
-    API_Update_CastPower(castPower); // Kirim ke game
-    UpdateUI("CastPowerInputBox", castPower);
-}
+local function ClosePanel()
+    IsPanelOpen = false
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local goal = {Position = UDim2.new(1, 0, 0, 0)} -- Kembali keluar layar
+    TweenService:Create(SidePanel, tweenInfo, goal):Play()
+end
 
-// Fungsi dipanggil saat pemain selesai mengetik di kotak angka
-FUNCTION OnReelSpeedInputFocusLost(newValue) {
-    FLOAT parsedValue = ParseFloat(newValue);
-    reelSpeed = Clamp(parsedValue, 0.00, 10.00); 
-    API_Update_ReelSpeed(reelSpeed); // Kirim ke game
-    UpdateUI("ReelSpeedSlider", reelSpeed);
-}
+FloatingIcon.MouseButton1Click:Connect(function()
+    if not IsPanelOpen then
+        OpenPanel()
+    else
+        ClosePanel()
+    end
+end)
 
+-- Tombol Tutup (Di Panel)
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -40, 0, 10)
+CloseButton.Text = "X"
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.Parent = SidePanel
+CloseButton.MouseButton1Click:Connect(ClosePanel)
 
-// =========================================================
-// 4. TOMBOL AKSI CEPAT (TELEPORTASI)
-// =========================================================
+-- =========================================================
+-- 3. WIDGET KONTROL PANCINGAN (Slider Sederhana)
+-- =========================================================
 
-FUNCTION OnTeleportToHome() {
-    API_Request_Teleport(API_Fetch_HomeLocation());
-    ShowNotification("Teleporting ke Base Camp...");
-    CloseSemiScreenPanel();
-}
+-- Fungsi Placeholder API (Di lingkungan executor, ini harus diganti dengan command eksekusi)
+local function UpdateCastPower(value)
+    -- *** GANTI BARIS INI DENGAN COMMAND EXECUTOR ASLI ***
+    print("Mengupdate Kekuatan Lemparan ke: " .. value) 
+    -- Contoh: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(value)
+end
 
-FUNCTION OnIslandSelectButtonTap() {
-    // Ganti tampilan panel untuk menampilkan daftar pulau yang bisa di-teleport
-    ShowSubPanel("TeleportIslandList");
-}
+-- Widget Lemparan
+local CastFrame = Instance.new("Frame")
+CastFrame.Size = UDim2.new(1, 0, 0, 60)
+CastFrame.Position = UDim2.new(0, 0, 0, 10)
+CastFrame.BackgroundTransparency = 1
+CastFrame.Parent = MainContent
 
-FUNCTION OnTeleportToEvent() {
-    IF (isEventActive) {
-        API_Request_Teleport(API_Fetch_EventLocation());
-        CloseSemiScreenPanel();
-    } ELSE {
-        ShowNotification("Saat ini tidak ada Event Memancing yang aktif.");
-    }
-}
+local CastLabel = Instance.new("TextLabel")
+CastLabel.Size = UDim2.new(1, 0, 0, 20)
+CastLabel.Text = "Kekuatan Lemparan: " .. CastPower
+CastLabel.BackgroundTransparency = 1
+CastLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+CastLabel.Parent = CastFrame
 
+-- Placeholder untuk Slider (gunakan UI Library atau Plugin untuk Slider sesungguhnya)
+local CastInput = Instance.new("TextBox")
+CastInput.Size = UDim2.new(1, -10, 0, 25)
+CastInput.Position = UDim2.new(0, 0, 0, 25)
+CastInput.Text = tostring(CastPower)
+CastInput.Parent = CastFrame
 
-// =========================================================
-// 5. SHOP CEPAT (TRANSAKSI)
-// =========================================================
+CastInput.FocusLost:Connect(function(enterPressed)
+    if enterPressed then
+        local value = tonumber(CastInput.Text)
+        if value and value >= 0.00 and value <= 10.00 then
+            CastPower = value
+            CastLabel.Text = "Kekuatan Lemparan: " .. string.format("%.2f", CastPower)
+            UpdateCastPower(CastPower)
+        else
+            CastInput.Text = tostring(CastPower) -- Reset jika input salah
+        end
+    end
+end)
 
-FUNCTION OnShopButtonTap() {
-    // Ganti tampilan panel untuk menampilkan menu Shop Cepat
-    ShowSubPanel("QuickShopMenu");
-}
+-- [ULANGI STRUKTUR INI UNTUK Kecepatan Tarikan]
+-- ...
 
-FUNCTION OnAutoSellFish(sellType) { // sellType bisa 'Common_Only' atau 'All_Except_Rare'
-    INT fishCount = API_Check_Inventory_Count();
-    
-    IF (fishCount > 0) {
-        INT earnings = API_Process_Fish_Sale(sellType);
-        playerCoins += earnings;
-        UpdateUI("PlayerCoins", playerCoins);
-        ShowNotification("Berhasil menjual ikan! +" + FormatCurrency(earnings) + " Coins.");
-    } ELSE {
-        ShowNotification("Inventory Ikan kosong.");
-    }
-}
+-- =========================================================
+-- 4. TOMBOL NAVIGASI & TELEPORT (Contoh Tombol)
+-- =========================================================
 
-// =========================================================
-// 6. FUNGSI UTILITAS UI
-// =========================================================
+local TeleportBtn = Instance.new("TextButton")
+TeleportBtn.Size = UDim2.new(0.5, -5, 0, 40)
+TeleportBtn.Position = UDim2.new(0, 0, 0, 150)
+TeleportBtn.Text = "🏝️ Teleport Pulau"
+TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+TeleportBtn.Parent = MainContent
 
-FUNCTION ShowSubPanel(panelName) {
-    // Logika visual untuk menukar konten di dalam Panel Samping
-    HideUI("MainControls");
-    ShowUI(panelName);
-    UpdateUI("BackButton", TRUE); // Tampilkan tombol kembali
-}
-
-FUNCTION BackButtonTap() {
-    // Kembali ke tampilan utama (Widget Kontrol Pancingan)
-    HideUI("SubPanel");
-    ShowUI("MainControls");
-}
+TeleportBtn.MouseButton1Click:Connect(function()
+    -- Ganti logika ini dengan command executor untuk teleportasi
+    print("Membuka menu teleportasi pulau...")
+    -- Contoh: API_Request_Teleport("IslandList")
+end)
