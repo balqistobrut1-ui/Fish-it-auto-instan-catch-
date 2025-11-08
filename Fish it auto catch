@@ -1,0 +1,133 @@
+// =========================================================
+// 1. VARIABEL GLOBAL & STATUS DATA HUB
+// =========================================================
+
+// Variabel Kontrol Pancingan (0.00 hingga 10.00)
+FLOAT castPower = 5.0;  
+FLOAT reelSpeed = 5.0;  
+
+// Variabel Status UI
+BOOL isPanelOpen = FALSE;
+FLOAT ScreenWidth = GetSystemWidth(); // Lebar layar perangkat
+FLOAT ScreenHeight = GetSystemHeight();
+
+// Variabel Data dari API Game Pihak Ketiga (Fish It!)
+INT playerCoins = API_Fetch_Coin();
+STRING currentLocation = API_Fetch_Current_Location();
+STRING[] availableIslands = API_Fetch_Islands();
+BOOL isEventActive = API_Check_Event_Status();
+
+
+// =========================================================
+// 2. LOGIKA FLOATING ICON & NAVIGASI PANEL
+// =========================================================
+
+FUNCTION OnFloatingIconTap() {
+    IF (isPanelOpen == FALSE) {
+        LaunchSemiScreenPanel(); // Meluncurkan Panel Kontrol Samping
+        isPanelOpen = TRUE;
+    } ELSE {
+        CloseSemiScreenPanel();
+        isPanelOpen = FALSE;
+    }
+}
+
+FUNCTION OnFloatingIconDrag(newX, newY) {
+    // Logika Snapping: Menempelkan ikon ke tepi layar terdekat
+    IF (newX > ScreenWidth / 2) {
+        MoveIconToEdge(Right); // Logika visual untuk menempel ke kanan
+    } ELSE {
+        MoveIconToEdge(Left);  // Logika visual untuk menempel ke kiri
+    }
+}
+
+FUNCTION OnPanelDismissed() {
+    // Dipanggil saat pengguna menekan 'X' atau tap di luar panel
+    CloseSemiScreenPanel();
+    isPanelOpen = FALSE;
+}
+
+
+// =========================================================
+// 3. WIDGET KONTROL PANCINGAN (Slider & Input Presisi)
+// =========================================================
+
+// Fungsi dipanggil saat Slider digeser atau tombol +/- ditekan
+FUNCTION OnCastPowerSliderChange(newValue) {
+    castPower = Clamp(newValue, 0.00, 10.00); 
+    API_Update_CastPower(castPower); // Kirim ke game
+    UpdateUI("CastPowerInputBox", castPower);
+}
+
+// Fungsi dipanggil saat pemain selesai mengetik di kotak angka
+FUNCTION OnReelSpeedInputFocusLost(newValue) {
+    FLOAT parsedValue = ParseFloat(newValue);
+    reelSpeed = Clamp(parsedValue, 0.00, 10.00); 
+    API_Update_ReelSpeed(reelSpeed); // Kirim ke game
+    UpdateUI("ReelSpeedSlider", reelSpeed);
+}
+
+
+// =========================================================
+// 4. TOMBOL AKSI CEPAT (TELEPORTASI)
+// =========================================================
+
+FUNCTION OnTeleportToHome() {
+    API_Request_Teleport(API_Fetch_HomeLocation());
+    ShowNotification("Teleporting ke Base Camp...");
+    CloseSemiScreenPanel();
+}
+
+FUNCTION OnIslandSelectButtonTap() {
+    // Ganti tampilan panel untuk menampilkan daftar pulau yang bisa di-teleport
+    ShowSubPanel("TeleportIslandList");
+}
+
+FUNCTION OnTeleportToEvent() {
+    IF (isEventActive) {
+        API_Request_Teleport(API_Fetch_EventLocation());
+        CloseSemiScreenPanel();
+    } ELSE {
+        ShowNotification("Saat ini tidak ada Event Memancing yang aktif.");
+    }
+}
+
+
+// =========================================================
+// 5. SHOP CEPAT (TRANSAKSI)
+// =========================================================
+
+FUNCTION OnShopButtonTap() {
+    // Ganti tampilan panel untuk menampilkan menu Shop Cepat
+    ShowSubPanel("QuickShopMenu");
+}
+
+FUNCTION OnAutoSellFish(sellType) { // sellType bisa 'Common_Only' atau 'All_Except_Rare'
+    INT fishCount = API_Check_Inventory_Count();
+    
+    IF (fishCount > 0) {
+        INT earnings = API_Process_Fish_Sale(sellType);
+        playerCoins += earnings;
+        UpdateUI("PlayerCoins", playerCoins);
+        ShowNotification("Berhasil menjual ikan! +" + FormatCurrency(earnings) + " Coins.");
+    } ELSE {
+        ShowNotification("Inventory Ikan kosong.");
+    }
+}
+
+// =========================================================
+// 6. FUNGSI UTILITAS UI
+// =========================================================
+
+FUNCTION ShowSubPanel(panelName) {
+    // Logika visual untuk menukar konten di dalam Panel Samping
+    HideUI("MainControls");
+    ShowUI(panelName);
+    UpdateUI("BackButton", TRUE); // Tampilkan tombol kembali
+}
+
+FUNCTION BackButtonTap() {
+    // Kembali ke tampilan utama (Widget Kontrol Pancingan)
+    HideUI("SubPanel");
+    ShowUI("MainControls");
+}
