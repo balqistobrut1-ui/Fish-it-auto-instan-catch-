@@ -5,49 +5,56 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
--- Variabel Status
+-- Ukuran Panel Tetap (Kotak)
+local PanelWidth = 350 
+local PanelHeight = 550 
 local IsPanelOpen = false
-local CastPower = 5.0  -- Nilai default 0.00 - 10.00
-local ReelSpeed = 5.0  -- Nilai default 0.00 - 10.00
+
+-- Variabel Kontrol Game
+local CastPower = 5.0
+local ReelSpeed = 5.0
+
+-- Variabel Kontrol Pemain
+local CurrentSpeed = 16
+local CurrentJumpPower = 50
+local NoclipEnabled = false
 
 -- Membuat GUI Utama
 local HubGui = Instance.new("ScreenGui")
 HubGui.Name = "FishItCompanionHub"
+HubGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 HubGui.Parent = PlayerGui
 
 -- =========================================================
--- 1. FLOATING HUB ICON & LOGIKA DRAG
+-- 1. FLOATING HUB ICON & LOGIKA DRAG (Simpel)
 -- =========================================================
-
-local FloatingIcon = Instance.new("ImageButton")
+local FloatingIcon = Instance.new("TextButton")
 FloatingIcon.Size = UDim2.new(0, 50, 0, 50) 
 FloatingIcon.Position = UDim2.new(1, -60, 0.8, 0) -- Kanan Bawah
-FloatingIcon.BackgroundTransparency = 0 -- Ganti jadi 1 jika pakai image transparan
-FloatingIcon.BackgroundColor3 = Color3.fromRGB(0, 150, 255) -- Warna Biru (Contoh)
-FloatingIcon.Text = "🎣" -- Ganti dengan Ikon/ImageID jika mau
+FloatingIcon.Text = "🎣" 
 FloatingIcon.Font = Enum.Font.SourceSansBold
 FloatingIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+FloatingIcon.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+FloatingIcon.ZIndex = 10
 FloatingIcon.Parent = HubGui
 
--- Logika Dragging sederhana (Membutuhkan Logika Snapping yang lebih kompleks untuk produksi)
-FloatingIcon.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        -- Placeholder for Drag logic
-    end
-end)
+-- [CATATAN: Logika Dragging dan Snapping ditinggalkan karena kompleksitas LUA. Gunakan MouseMove/TouchChanged jika diperlukan.]
 
 -- =========================================================
--- 2. PANEL KONTROL SAMPING (GUI VISUAL)
+-- 2. PANEL KONTROL SAMPING (Kotak 350x550)
 -- =========================================================
-
 local SidePanel = Instance.new("Frame")
-SidePanel.Size = UDim2.new(0.6, 0, 1, 0) -- Lebar 60%, Tinggi 100%
-SidePanel.Position = UDim2.new(1, 0, 0, 0) -- Mulai tersembunyi
+SidePanel.Size = UDim2.new(0, PanelWidth, 0, PanelHeight)
+-- Posisi Awal: Di luar layar (Offset 0 dari kanan) dan Center Vertikal
+SidePanel.Position = UDim2.new(1, 0, 0.5, -PanelHeight/2) 
 SidePanel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-SidePanel.ZIndex = 9
+SidePanel.BorderSizePixel = 0
+SidePanel.ClipsDescendants = true
 SidePanel.Parent = HubGui
 
+-- Label Judul
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -40, 0, 30)
 TitleLabel.Position = UDim2.new(0, 10, 0, 10)
@@ -56,26 +63,123 @@ TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Parent = SidePanel
 
--- FRAME UTAMA untuk Kontrol Pancingan
-local MainContent = Instance.new("Frame")
-MainContent.Size = UDim2.new(1, -20, 0.9, -50) -- Ambil sisa ruang
-MainContent.Position = UDim2.new(0, 10, 0, 50)
-MainContent.BackgroundTransparency = 1
-MainContent.Parent = SidePanel
+-- FRAME UTAMA: Kontrol Pancingan Default
+local MainControls = Instance.new("Frame")
+MainControls.Size = UDim2.new(1, -20, 1, -50)
+MainControls.Position = UDim2.new(0, 10, 0, 50)
+MainControls.BackgroundTransparency = 1
+MainControls.Parent = SidePanel
 
--- Fungsi Animasi
+-- Sub-Panel Containers (Hidden by default)
+local PlayerPanel = Instance.new("Frame")
+PlayerPanel.Size = UDim2.new(1, 0, 1, 0)
+PlayerPanel.Position = UDim2.new(0, 0, 0, 0)
+PlayerPanel.BackgroundTransparency = 1
+PlayerPanel.Visible = false
+PlayerPanel.Parent = SidePanel
+
+local ShopPanel = Instance.new("Frame")
+ShopPanel.Size = UDim2.new(1, 0, 1, 0)
+ShopPanel.Position = UDim2.new(0, 0, 0, 0)
+ShopPanel.BackgroundTransparency = 1
+ShopPanel.Visible = false
+ShopPanel.Parent = SidePanel
+
+-- =========================================================
+-- 3. FUNGSI UTILITY & API PLACEHOLDER
+-- =========================================================
+
+-- FUNGSI INI HARUS DIGANTI DENGAN COMMAND EXECUTOR ASLI!
+local function SendGameCommand(commandType, value)
+    print("EXECUTOR COMMAND SENT -> Tipe: " .. commandType .. ", Nilai: " .. tostring(value))
+    -- CONTOH: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(commandType, value)
+end
+
+-- =========================================================
+-- 4. KONTROL PANCINGAN (DI DALAM MainControls)
+-- =========================================================
+local function createControlWidget(parent, yPos, labelText, defaultValue, commandType)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 0, 65)
+    frame.Position = UDim2.new(0, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Text = labelText .. ": " .. string.format("%.2f", defaultValue)
+    label.BackgroundTransparency = 1
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Parent = frame
+
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(0.4, 0, 0, 25)
+    input.Position = UDim2.new(0, 0, 0, 30)
+    input.Text = tostring(defaultValue)
+    input.Parent = frame
+    input.TextXAlignment = Enum.TextXAlignment.Center
+
+    input.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local value = tonumber(input.Text)
+            if value and value >= 0.00 and value <= 10.00 then
+                if commandType == "CastPower" then CastPower = value else ReelSpeed = value end
+                label.Text = labelText .. ": " .. string.format("%.2f", value)
+                SendGameCommand(commandType, value) -- Panggil API
+            else
+                input.Text = tostring(defaultValue) -- Reset
+            end
+        end
+    end)
+    -- [CATATAN: Logic SLIDER dihilangkan untuk menjaga kode tetap sederhana dan menghindari UI Library.]
+end
+
+-- Pasang Widget
+createControlWidget(MainControls, 10, "Kekuatan Lemparan", CastPower, "CastPower")
+createControlWidget(MainControls, 85, "Kecepatan Tarikan", ReelSpeed, "ReelSpeed")
+
+-- =========================================================
+-- 5. TOMBOL AKSI & NAVIGASI (DI DALAM MainControls)
+-- =========================================================
+local function createButton(parent, yPos, text, bgColor, clickFunc)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 35)
+    btn.Position = UDim2.new(0, 0, 0, yPos)
+    btn.Text = text
+    btn.BackgroundColor3 = bgColor
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = parent
+    btn.MouseButton1Click:Connect(clickFunc)
+    return btn
+end
+
+-- Tombol Navigasi dan Aksi Cepat
+createButton(MainControls, 170, "🏠 Home Teleport", Color3.fromRGB(50, 50, 50), function() SendGameCommand("Teleport", "Home") end)
+createButton(MainControls, 210, "🏝️ Pulau Pilihan", Color3.fromRGB(50, 50, 50), function() ShopPanel.Visible = true; MainControls.Visible = false end) -- SubPanel Teleport
+createButton(MainControls, 250, "🚨 Event Terbaru", Color3.fromRGB(150, 50, 50), function() SendGameCommand("Teleport", "Event") end)
+createButton(MainControls, 290, "🛍️ Shop Cepat", Color3.fromRGB(50, 150, 50), function() ShopPanel.Visible = true; MainControls.Visible = false end) -- SubPanel Shop
+createButton(MainControls, 330, "👤 Kontrol Pemain", Color3.fromRGB(0, 100, 200), function() PlayerPanel.Visible = true; MainControls.Visible = false end) -- SubPanel Player
+
+-- =========================================================
+-- 6. FUNGSI BUKA/TUTUP UTAMA
+-- =========================================================
+
 local function OpenPanel()
     IsPanelOpen = true
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local goal = {Position = UDim2.new(0.4, 0, 0, 0)} -- Pindah ke 40% dari kiri (membuat panel 60% terlihat)
+    local goal = {Position = UDim2.new(1, -PanelWidth, 0.5, -PanelHeight/2)} 
     TweenService:Create(SidePanel, tweenInfo, goal):Play()
 end
 
 local function ClosePanel()
     IsPanelOpen = false
     local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local goal = {Position = UDim2.new(1, 0, 0, 0)} -- Kembali keluar layar
+    local goal = {Position = UDim2.new(1, 0, 0.5, -PanelHeight/2)} 
     TweenService:Create(SidePanel, tweenInfo, goal):Play()
+    -- Pastikan semua kembali ke MainControls saat ditutup
+    MainControls.Visible = true 
+    PlayerPanel.Visible = false
+    ShopPanel.Visible = false
 end
 
 FloatingIcon.MouseButton1Click:Connect(function()
@@ -86,7 +190,7 @@ FloatingIcon.MouseButton1Click:Connect(function()
     end
 end)
 
--- Tombol Tutup (Di Panel)
+-- Tombol Tutup di Panel
 local CloseButton = Instance.new("TextButton")
 CloseButton.Size = UDim2.new(0, 30, 0, 30)
 CloseButton.Position = UDim2.new(1, -40, 0, 10)
@@ -96,66 +200,51 @@ CloseButton.Parent = SidePanel
 CloseButton.MouseButton1Click:Connect(ClosePanel)
 
 -- =========================================================
--- 3. WIDGET KONTROL PANCINGAN (Slider Sederhana)
+-- 7. SUB-PANEL CONTROLS (Placeholder Logics)
 -- =========================================================
 
--- Fungsi Placeholder API (Di lingkungan executor, ini harus diganti dengan command eksekusi)
-local function UpdateCastPower(value)
-    -- *** GANTI BARIS INI DENGAN COMMAND EXECUTOR ASLI ***
-    print("Mengupdate Kekuatan Lemparan ke: " .. value) 
-    -- Contoh: game:GetService("ReplicatedStorage").RemoteEvent:FireServer(value)
+-- Tambahkan Tombol "Kembali" untuk Sub-Panel
+local function createBackButton(subPanel)
+    local backBtn = Instance.new("TextButton")
+    backBtn.Size = UDim2.new(0.3, 0, 0, 30)
+    backBtn.Position = UDim2.new(0, 10, 0.9, 0)
+    backBtn.Text = "⬅️ Kembali"
+    backBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    backBtn.Parent = subPanel
+    backBtn.MouseButton1Click:Connect(function()
+        subPanel.Visible = false
+        MainControls.Visible = true
+    end)
+    return backBtn
 end
 
--- Widget Lemparan
-local CastFrame = Instance.new("Frame")
-CastFrame.Size = UDim2.new(1, 0, 0, 60)
-CastFrame.Position = UDim2.new(0, 0, 0, 10)
-CastFrame.BackgroundTransparency = 1
-CastFrame.Parent = MainContent
+-- Player Panel Content (Contoh Speed Control)
+local function createPlayerPanel()
+    -- Logika Noclip
+    local NoclipBtn = createButton(PlayerPanel, 50, "Noclip: OFF", Color3.fromRGB(50, 50, 50), function(btn)
+        NoclipEnabled = not NoclipEnabled
+        btn.Text = "Noclip: " .. (NoclipEnabled and "ON" or "OFF")
+        -- *** GANTI DENGAN SCRIPT NOCLIP EXECUTOR ASLI ***
+        print("Noclip Toggled: " .. tostring(NoclipEnabled))
+    end)
+    
+    -- Speed Control (TextBox dan Label)
+    -- [Tambahkan lebih banyak kontrol (Speed/Jump) di sini]
 
-local CastLabel = Instance.new("TextLabel")
-CastLabel.Size = UDim2.new(1, 0, 0, 20)
-CastLabel.Text = "Kekuatan Lemparan: " .. CastPower
-CastLabel.BackgroundTransparency = 1
-CastLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-CastLabel.Parent = CastFrame
+    createBackButton(PlayerPanel)
+end
+createPlayerPanel()
 
--- Placeholder untuk Slider (gunakan UI Library atau Plugin untuk Slider sesungguhnya)
-local CastInput = Instance.new("TextBox")
-CastInput.Size = UDim2.new(1, -10, 0, 25)
-CastInput.Position = UDim2.new(0, 0, 0, 25)
-CastInput.Text = tostring(CastPower)
-CastInput.Parent = CastFrame
+-- Shop Panel Content (Placeholder)
+local function createShopPanel()
+    local AutoSellBtn = createButton(ShopPanel, 50, "Jual Otomatis (Non-Langit)", Color3.fromRGB(20, 150, 20), function() 
+        SendGameCommand("Shop", "AutoSell")
+        print("Perintah Jual Otomatis Terkirim.")
+    end)
+    
+    -- [Tambahkan kontrol Beli Rod/Bait di sini]
+    
+    createBackButton(ShopPanel)
+end
+createShopPanel()
 
-CastInput.FocusLost:Connect(function(enterPressed)
-    if enterPressed then
-        local value = tonumber(CastInput.Text)
-        if value and value >= 0.00 and value <= 10.00 then
-            CastPower = value
-            CastLabel.Text = "Kekuatan Lemparan: " .. string.format("%.2f", CastPower)
-            UpdateCastPower(CastPower)
-        else
-            CastInput.Text = tostring(CastPower) -- Reset jika input salah
-        end
-    end
-end)
-
--- [ULANGI STRUKTUR INI UNTUK Kecepatan Tarikan]
--- ...
-
--- =========================================================
--- 4. TOMBOL NAVIGASI & TELEPORT (Contoh Tombol)
--- =========================================================
-
-local TeleportBtn = Instance.new("TextButton")
-TeleportBtn.Size = UDim2.new(0.5, -5, 0, 40)
-TeleportBtn.Position = UDim2.new(0, 0, 0, 150)
-TeleportBtn.Text = "🏝️ Teleport Pulau"
-TeleportBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-TeleportBtn.Parent = MainContent
-
-TeleportBtn.MouseButton1Click:Connect(function()
-    -- Ganti logika ini dengan command executor untuk teleportasi
-    print("Membuka menu teleportasi pulau...")
-    -- Contoh: API_Request_Teleport("IslandList")
-end)
